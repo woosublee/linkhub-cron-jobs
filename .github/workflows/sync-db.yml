@@ -1,0 +1,20 @@
+name: Sync Production DB to Staging
+
+on:
+  schedule:
+    - cron: '0 21 * * *' # 매일 오전 6시 KST (UTC+9)
+  workflow_dispatch: # 수동 실행 가능
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Install psql
+        run: sudo apt-get install -y postgresql-client
+
+      - name: Sync links → links_staging
+        env:
+          DB_URL: ${{ secrets.DB_URL }}
+        run: |
+          psql "$DB_URL" -c "TRUNCATE TABLE links_staging; INSERT INTO links_staging SELECT * FROM links;"
