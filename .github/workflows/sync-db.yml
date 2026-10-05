@@ -16,5 +16,23 @@ jobs:
       - name: Sync links → links_staging
         env:
           DB_URL: ${{ secrets.DB_URL }}
+        # 두 테이블에 공통으로 있는 컬럼만 이름으로 복사한다.
+        # links에 컬럼이 추가돼도 순서·개수 차이로 동기화가 깨지지 않는다.
         run: |
-          psql "$DB_URL" -c "TRUNCATE TABLE links_staging; INSERT INTO links_staging SELECT * FROM links;"
+          psql "$DB_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          BEGIN;
+          TRUNCATE TABLE links_staging;
+          DO $$
+          DECLARE
+            cols text;
+          BEGIN
+            SELECT string_agg(quote_ident(p.column_name), ', ' ORDER BY p.ordinal_position)
+              INTO cols
+              FROM information_schema.columns p
+              JOIN information_schema.columns s
+                ON s.table_schema = 'public' AND s.table_name = 'links_staging' AND s.column_name = p.column_name
+             WHERE p.table_schema = 'public' AND p.table_name = 'links';
+            EXECUTE format('INSERT INTO links_staging (%s) SELECT %s FROM links', cols, cols);
+          END $$;
+          COMMIT;
+          SQL
